@@ -1,0 +1,9 @@
+# Nixpacks config for Railway (no Docker). Installs CMake + GCC so dlib/face_recognition can build.
+[phases.setup]
+nixPkgs = ["...", "cmake", "gcc"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "gunicorn app.main:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8000}"
