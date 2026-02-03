@@ -50,11 +50,10 @@ Follow these steps in order. Replace placeholders like `YOUR_PROJECT_ID`, `your-
 2. **Database name:** `attendance_db` → **Create**.
 3. Go to **Overview** tab. Note:
    - **Public IP address** (e.g. `34.1.2.3`).
-4. **Connection string** will look like:
-   ```text
-   postgresql://postgres:YOUR_ROOT_PASSWORD@PUBLIC_IP:5432/attendance_db
-   ```
-   Replace `YOUR_ROOT_PASSWORD` and `PUBLIC_IP`. Save this as `DATABASE_URL` for the backend (you’ll use it in Step 3).
+4. **Build your connection string** (you will use it in Step 3.6 on the VM, not here):
+   - Format: `postgresql://postgres:Hina123@136.119.20.134:5432/attendance_db`
+   - Replace `YOUR_ROOT_PASSWORD` with the root password you set; replace `PUBLIC_IP` with the instance’s public IP from the Overview tab.
+   - **Copy this full string** and keep it somewhere handy (e.g. a notepad). You will paste it into the backend’s `.env` file when you reach **Step 3.6**.
 
 ### 2.3 Allow the VM to connect (after you have the VM IP)
 
@@ -88,8 +87,10 @@ Follow these steps in order. Replace placeholders like `YOUR_PROJECT_ID`, `your-
 
 ```bash
 sudo apt update
-sudo apt install -y python3.11 python3.11-venv python3-pip git build-essential cmake
+sudo apt install -y python3.11 python3.11-dev python3.11-venv python3-pip git build-essential cmake pkg-config libopenblas-dev liblapack-dev
 ```
+
+**Important:** `python3.11-dev` is required for building dlib (provides Python headers). `pkg-config`, `libopenblas-dev`, and `liblapack-dev` are recommended for optimized performance.
 
 ### 3.5 Clone the repo and install Python dependencies
 
@@ -97,7 +98,7 @@ Replace `https://github.com/YOUR_USERNAME/YOUR_REPO.git` with your repo URL.
 
 ```bash
 cd $HOME
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git attendance
+git clone https://github.com/Hina-Hanan/attendance_system.git attendance
 cd attendance/backend
 python3.11 -m venv venv
 source venv/bin/activate
@@ -107,6 +108,8 @@ pip install -r requirements.txt
 (This may take several minutes while dlib/face_recognition build.)
 
 ### 3.6 Create the `.env` file on the VM
+
+**This is where you save `DATABASE_URL`:** in a file named `.env` on the backend VM (the connection string you copied in Step 2.2 goes here).
 
 ```bash
 nano .env
@@ -120,7 +123,7 @@ SECRET_KEY=your-long-random-secret-key-change-this
 CORS_ORIGINS=["http://storage.googleapis.com/YOUR_BUCKET_NAME","http://YOUR_BUCKET_NAME.storage.googleapis.com"]
 ```
 
-- Replace `YOUR_ROOT_PASSWORD` and `CLOUD_SQL_PUBLIC_IP` with the Cloud SQL password and public IP from Step 2.
+- **DATABASE_URL:** Paste the full connection string from Step 2.2 (or replace `YOUR_ROOT_PASSWORD` and `CLOUD_SQL_PUBLIC_IP` with your Cloud SQL password and public IP).
 - Replace `YOUR_BUCKET_NAME` with the bucket name you’ll use in Step 4 (e.g. `face-attendance-frontend`). You can refine CORS later after the bucket is created.
 
 Save: **Ctrl+O**, **Enter**, **Ctrl+X**.
@@ -193,7 +196,7 @@ On your **local machine** (where your repo is), in the project root:
 
 ```bash
 cd frontend
-set REACT_APP_API_URL=http://VM_EXTERNAL_IP:8000/api/v1
+set REACT_APP_API_URL=http://34.16.52.183:8000/api/v1
 npm run build
 ```
 
