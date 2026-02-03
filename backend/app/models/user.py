@@ -6,7 +6,9 @@ from app.database import Base
 
 
 class User(Base):
-    __tablename__ = "users"
+    # Use a non-reserved table name to avoid conflicts with
+    # built-in PostgreSQL types on some managed providers.
+    __tablename__ = "app_users"
 
     user_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     user_number = Column(Integer, unique=True, nullable=True, index=True)  # Small ID 1, 2, 3... (order of registration)

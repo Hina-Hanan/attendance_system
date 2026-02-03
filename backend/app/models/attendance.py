@@ -10,7 +10,7 @@ class Attendance(Base):
     __tablename__ = "attendance"
 
     attendance_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("app_users.user_id"), nullable=False, index=True)
     punch_in_time = Column(DateTime(timezone=True), nullable=True)
     punch_out_time = Column(DateTime(timezone=True), nullable=True)
     total_duration = Column(String(20), nullable=True)  # Store as "HH:MM:SS" string
