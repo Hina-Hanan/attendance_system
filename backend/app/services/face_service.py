@@ -56,13 +56,21 @@ class FaceService:
                 encodings.append(encoding)
             
             # Check for duplicate faces (prevent same person registering twice)
-            # Use stricter threshold so siblings/similar faces aren't falsely rejected
+            # Require MULTIPLE images to match (not just one) to avoid false rejections from bad angles/lighting
             all_users = db.query(User).all()
             all_stored_encodings = [user.face_encodings for user in all_users]
             
+            # Count how many of the new encodings match existing users
+            match_count = 0
             for encoding in encodings:
                 if check_duplicate_face(encoding, all_stored_encodings, threshold=settings.FACE_DUPLICATE_CHECK_THRESHOLD):
-                    return False, "This face is already registered. Please use a different person.", None
+                    match_count += 1
+            
+            # Only block if MOST images match (e.g. 2+ out of 3, or 3+ out of 4)
+            # This prevents one bad angle/lighting from blocking siblings
+            required_matches = max(2, len(encodings) - 1)  # At least 2, or all-but-one
+            if match_count >= required_matches:
+                return False, "This face is already registered. Please use a different person.", None
             
             # Convert encodings to strings for storage
             encoding_strings = [encode_to_string(enc) for enc in encodings]
