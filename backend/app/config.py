@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     FACE_MATCH_THRESHOLD: float = 0.6  # Lower = stricter; used for display/fallback
     FACE_AUTH_THRESHOLD: float = 0.5  # Stricter for login (reduce wrong-person match)
     FACE_AUTH_AMBIGUITY_MARGIN: float = 0.08  # Reject if best and second-best match are too close
-    FACE_DUPLICATE_CHECK_THRESHOLD: float = 0.5  # Stricter for registration (avoid false "already registered")
+    FACE_DUPLICATE_CHECK_THRESHOLD: float = 0.42  # Only block when very close match (allows siblings to register)
     FACE_ENCODING_NUM_JITTERS: int = 3  # Higher = more stable encoding (slower)
     MIN_FACE_IMAGES_REQUIRED: int = 3
     MAX_FACE_IMAGES_REQUIRED: int = 4
