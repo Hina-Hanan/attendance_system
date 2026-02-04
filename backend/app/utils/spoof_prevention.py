@@ -137,13 +137,19 @@ class SpoofPrevention:
         # Check for blink (simplified)
         blink_detected = self.detect_blink(face_image)
         
-        # Require either movement or blink for liveness
-        if movement_detected or blink_detected:
+        # Require BOTH movement AND blink for liveness (stricter anti-spoof)
+        if movement_detected and blink_detected:
             return True, "Liveness verified"
         
-        # If we have enough frames and no movement/blink, might be static image
+        # If we have enough frames and liveness conditions weren't met, likely spoof/static
         if len(self.frame_history) >= settings.SPOOF_CHECK_FRAMES:
-            return False, "No movement detected - possible static image"
+            if not movement_detected and not blink_detected:
+                return False, "No movement or blink detected - possible static image"
+            if not movement_detected:
+                return False, "No head movement detected - possible static image"
+            if not blink_detected:
+                return False, "No blink/eye activity detected - possible static image"
+            return False, "Liveness not verified - please try again"
         
         return False, "Collecting frames for liveness check"
     
