@@ -4,7 +4,7 @@ import numpy as np
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.utils.face_recognition_utils import (
-    encode_face_image_enhanced,
+    encode_face_image_robust,
     match_face,
     check_duplicate_face,
     encode_to_string
@@ -47,20 +47,21 @@ class FaceService:
                 if existing:
                     return False, "This user_id is already in use. Choose a different one or leave empty to auto-generate.", None
             
-            # Encode all face images
+            # Encode all face images (robust: try original + enhanced, better encoding)
             encodings = []
             for idx, image_bytes in enumerate(face_images):
-                encoding = encode_face_image_enhanced(image_bytes)
+                encoding = encode_face_image_robust(image_bytes)
                 if encoding is None:
                     return False, f"Failed to detect face in image {idx + 1}. Please ensure face is clearly visible.", None
                 encodings.append(encoding)
             
             # Check for duplicate faces (prevent same person registering twice)
+            # Use stricter threshold so siblings/similar faces aren't falsely rejected
             all_users = db.query(User).all()
             all_stored_encodings = [user.face_encodings for user in all_users]
             
             for encoding in encodings:
-                if check_duplicate_face(encoding, all_stored_encodings):
+                if check_duplicate_face(encoding, all_stored_encodings, threshold=settings.FACE_DUPLICATE_CHECK_THRESHOLD):
                     return False, "This face is already registered. Please use a different person.", None
             
             # Convert encodings to strings for storage
@@ -89,38 +90,44 @@ class FaceService:
     def authenticate_face(db: Session, face_image: bytes) -> Tuple[bool, Optional[User], float, str]:
         """
         Authenticate a face against registered users.
+        Uses stricter threshold and rejects ambiguous matches (two users too close).
         
         Returns:
             Tuple of (success, user_object, confidence_score, message)
         """
         try:
-            # Encode the face
-            face_encoding = encode_face_image_enhanced(face_image)
+            face_encoding = encode_face_image_robust(face_image)
             if face_encoding is None:
-                return False, None, 0.0, "No face detected in image"
+                return False, None, 0.0, "No face detected. Ensure your face is clearly visible and well lit."
             
-            # Get all users
             users = db.query(User).all()
-            
             if not users:
                 return False, None, 0.0, "No users registered in system"
             
-            # Match against all users
-            best_match = None
-            best_distance = float('inf')
+            auth_threshold = getattr(settings, "FACE_AUTH_THRESHOLD", settings.FACE_MATCH_THRESHOLD)
+            ambiguity_margin = getattr(settings, "FACE_AUTH_AMBIGUITY_MARGIN", 0.08)
             
+            # Get distance to every user (use auth threshold for match)
+            distances = []
             for user in users:
-                is_match, distance = match_face(face_encoding, user.face_encodings)
-                if is_match and distance < best_distance:
-                    best_match = user
-                    best_distance = distance
+                is_match, distance = match_face(face_encoding, user.face_encodings, threshold=auth_threshold)
+                if is_match:
+                    distances.append((distance, user))
             
-            if best_match:
-                # Convert distance to confidence (lower distance = higher confidence)
-                confidence = max(0.0, min(1.0, 1.0 - best_distance))
-                return True, best_match, confidence, f"Authentication successful"
-            else:
+            if not distances:
                 return False, None, 0.0, "Face not recognized. Please register first."
+            
+            # Sort by distance (best first)
+            distances.sort(key=lambda x: x[0])
+            best_distance, best_user = distances[0]
+            second_best_distance = distances[1][0] if len(distances) > 1 else float("inf")
+            
+            # Reject if two users are too close (ambiguous match)
+            if second_best_distance - best_distance < ambiguity_margin:
+                return False, None, 0.0, "Match unclear. Please try again in better lighting or move slightly."
+            
+            confidence = max(0.0, min(1.0, 1.0 - best_distance))
+            return True, best_user, confidence, "Authentication successful"
         
         except Exception as e:
             return False, None, 0.0, f"Error authenticating face: {str(e)}"

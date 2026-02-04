@@ -67,6 +67,8 @@ export const getAttendanceByDate = (date, limit = 500) => {
   params.append('limit', String(limit));
   return api.get(`/attendance/by-date?${params.toString()}`);
 };
+export const getDailySummary = (date) =>
+  api.get(`/attendance/daily-summary?date=${encodeURIComponent(date)}`);
 
 // Export APIs
 export const exportAttendanceCSV = (startDate, endDate) => {

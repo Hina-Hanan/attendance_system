@@ -6,84 +6,80 @@ import json
 from app.config import settings
 
 
-def encode_face_image(image_bytes: bytes) -> Optional[np.ndarray]:
+def _decode_and_rgb(image_bytes: bytes) -> Optional[tuple]:
+    """Decode image bytes to RGB. Returns (rgb_image, bgr_image) or None."""
+    try:
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if image is None:
+            return None
+        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        return (rgb_image, image)
+    except Exception:
+        return None
+
+
+def encode_face_image(image_bytes: bytes, num_jitters: int = 1) -> Optional[np.ndarray]:
     """
-    Encode a face from image bytes.
+    Encode a face from image bytes (original image, no preprocessing).
     Returns face encoding (128-dimensional vector) or None if no face found.
     """
     try:
-        # Convert bytes to numpy array
-        nparr = np.frombuffer(image_bytes, np.uint8)
-        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
-        if image is None:
+        decoded = _decode_and_rgb(image_bytes)
+        if decoded is None:
             return None
-        
-        # Convert BGR to RGB (face_recognition uses RGB)
-        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        
-        # Find face locations
+        rgb_image, _ = decoded
         face_locations = face_recognition.face_locations(rgb_image)
-        
         if len(face_locations) == 0:
             return None
-        
-        # Get face encodings (use first face if multiple found)
-        face_encodings = face_recognition.face_encodings(rgb_image, face_locations)
-        
+        face_encodings = face_recognition.face_encodings(
+            rgb_image, face_locations, num_jitters=num_jitters
+        )
         if len(face_encodings) == 0:
             return None
-        
         return face_encodings[0]
-    
     except Exception as e:
         print(f"Error encoding face: {e}")
         return None
 
 
-def encode_face_image_enhanced(image_bytes: bytes) -> Optional[np.ndarray]:
+def encode_face_image_enhanced(image_bytes: bytes, num_jitters: int = 1) -> Optional[np.ndarray]:
     """
-    Enhanced face encoding with preprocessing for better accuracy.
-    Applies grayscale normalization and histogram equalization.
+    Enhanced face encoding with histogram equalization (helps in poor lighting).
     """
     try:
-        # Convert bytes to numpy array
-        nparr = np.frombuffer(image_bytes, np.uint8)
-        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
-        if image is None:
+        decoded = _decode_and_rgb(image_bytes)
+        if decoded is None:
             return None
-        
-        # Preprocessing for lighting variations
-        # Convert to grayscale for normalization
+        _, image = decoded
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        
-        # Apply histogram equalization
         equalized = cv2.equalizeHist(gray)
-        
-        # Convert back to BGR (face_recognition needs color)
         enhanced = cv2.cvtColor(equalized, cv2.COLOR_GRAY2BGR)
-        
-        # Convert BGR to RGB
         rgb_image = cv2.cvtColor(enhanced, cv2.COLOR_BGR2RGB)
-        
-        # Find face locations
         face_locations = face_recognition.face_locations(rgb_image)
-        
         if len(face_locations) == 0:
             return None
-        
-        # Get face encodings
-        face_encodings = face_recognition.face_encodings(rgb_image, face_locations)
-        
+        face_encodings = face_recognition.face_encodings(
+            rgb_image, face_locations, num_jitters=num_jitters
+        )
         if len(face_encodings) == 0:
             return None
-        
         return face_encodings[0]
-    
     except Exception as e:
         print(f"Error encoding face (enhanced): {e}")
         return None
+
+
+def encode_face_image_robust(image_bytes: bytes) -> Optional[np.ndarray]:
+    """
+    Try to detect and encode a face: original image first, then enhanced.
+    Uses more jitters for stable encoding. Reduces 'no face detected' and wrong-person matches.
+    """
+    num_jitters = getattr(settings, "FACE_ENCODING_NUM_JITTERS", 3)
+    encoding = encode_face_image(image_bytes, num_jitters=num_jitters)
+    if encoding is not None:
+        return encoding
+    return encode_face_image_enhanced(image_bytes, num_jitters=num_jitters)
 
 
 def match_face(face_encoding: np.ndarray, stored_encodings: List[str], threshold: float = None) -> Tuple[bool, float]:

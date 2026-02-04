@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { getTotalUsers, getTodayAttendance, exportAttendanceCSV, getUserAttendanceByNumber, getAttendanceByDate, getUsers } from '../services/api';
+import { getTotalUsers, getTodayAttendance, exportAttendanceCSV, getUserAttendanceByNumber, getAttendanceByDate, getUsers, getDailySummary } from '../services/api';
 import AttendanceTable from './AttendanceTable';
 
 const Dashboard = () => {
@@ -15,6 +15,8 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [todayDailySummary, setTodayDailySummary] = useState([]);
+  const [lookupDailySummary, setLookupDailySummary] = useState([]);
 
   useEffect(() => {
     loadData();
@@ -24,14 +26,17 @@ const Dashboard = () => {
     try {
       setLoading(true);
       setError(null);
-      const [usersRes, attendanceRes, allUsersRes] = await Promise.all([
+      const todayKey = new Date().toISOString().split('T')[0];
+      const [usersRes, attendanceRes, allUsersRes, summaryRes] = await Promise.all([
         getTotalUsers(),
         getTodayAttendance(),
         getUsers(),
+        getDailySummary(todayKey).catch(() => ({ data: { summaries: [] } })),
       ]);
       setTotalUsers(usersRes.data.total_users);
       setTodayAttendance(attendanceRes.data);
       setAllUsers(allUsersRes.data || []);
+      setTodayDailySummary(summaryRes.data?.summaries || []);
     } catch (err) {
       const msg = err.response?.status === 500
         ? 'Server error. Ensure the backend is running and the database has the latest schema.'
@@ -113,12 +118,17 @@ const Dashboard = () => {
       try {
         setLookupLoading(true);
         setLookupError(null);
-        const res = await getAttendanceByDate(d);
+        const [res, summaryRes] = await Promise.all([
+          getAttendanceByDate(d),
+          getDailySummary(d).catch(() => ({ data: { summaries: [] } })),
+        ]);
         setUserAttendance(res.data || []);
+        setLookupDailySummary(summaryRes.data?.summaries || []);
       } catch (err) {
         const msg = err.response?.data?.detail || err.message || 'Failed to load attendance for that date';
         setLookupError(msg);
         setUserAttendance([]);
+        setLookupDailySummary([]);
         console.error(err);
       } finally {
         setLookupLoading(false);
@@ -141,10 +151,17 @@ const Dashboard = () => {
       setLookupError(null);
       const res = await getUserAttendanceByNumber(Number(n), d || null);
       setUserAttendance(res.data || []);
+      if (d) {
+        const summaryRes = await getDailySummary(d).catch(() => ({ data: { summaries: [] } }));
+        setLookupDailySummary(summaryRes.data?.summaries || []);
+      } else {
+        setLookupDailySummary([]);
+      }
     } catch (err) {
       const msg = err.response?.data?.detail || err.message || 'Failed to load user attendance';
       setLookupError(msg);
       setUserAttendance([]);
+      setLookupDailySummary([]);
       console.error(err);
     } finally {
       setLookupLoading(false);
@@ -203,6 +220,21 @@ const Dashboard = () => {
             {exporting ? 'Exporting...' : 'Export CSV'}
           </button>
         </div>
+        {todayDailySummary.length > 0 && (
+          <div style={{ marginBottom: '12px', padding: '12px', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
+            <strong>Total active hours today (per user):</strong>
+            <ul style={{ margin: '8px 0 0', paddingLeft: '20px' }}>
+              {todayDailySummary.map((s) => (
+                <li key={s.user_id}>
+                  {s.user_number != null ? `#${s.user_number} ` : ''}{s.username}: <strong>{s.total_duration}</strong>
+                  {s.sessions && s.sessions.length > 1 && (
+                    <span style={{ color: '#666', fontSize: '0.9em' }}> ({s.sessions.length} sessions)</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
           <button className={`btn ${todayFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setTodayFilter('all')}>
             All ({todayAttendance.length})
@@ -253,6 +285,22 @@ const Dashboard = () => {
         {lookupError && (
           <div className="alert alert-error" style={{ marginBottom: '15px' }}>
             {lookupError}
+          </div>
+        )}
+
+        {lookupDailySummary.length > 0 && (lookupDate || userAttendance.length > 0) && (
+          <div style={{ marginBottom: '15px', padding: '12px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+            <strong>Total active hours for selected date (per user):</strong>
+            <ul style={{ margin: '8px 0 0', paddingLeft: '20px' }}>
+              {lookupDailySummary.map((s) => (
+                <li key={s.user_id}>
+                  {s.user_number != null ? `#${s.user_number} ` : ''}{s.username}: <strong>{s.total_duration}</strong>
+                  {s.sessions && s.sessions.length > 1 && (
+                    <span style={{ color: '#666', fontSize: '0.9em' }}> ({s.sessions.length} sessions)</span>
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 

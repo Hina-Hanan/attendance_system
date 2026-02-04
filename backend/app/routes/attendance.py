@@ -103,6 +103,15 @@ def get_user_attendance(user_id: str, limit: int = 100, db: Session = Depends(ge
     return result
 
 
+@router.get("/daily-summary")
+def get_daily_summary(date: str, db: Session = Depends(get_db)):
+    """Get per-user daily summary for a date (YYYY-MM-DD): sessions and total active duration."""
+    if not date or len(date) != 10:
+        return {"date": date, "summaries": []}
+    summaries = AttendanceService.get_daily_summary(db, date)
+    return {"date": date, "summaries": summaries}
+
+
 @router.get("/user-number/{user_number}", response_model=List[AttendanceResponse])
 def get_user_attendance_by_number(
     user_number: int,
