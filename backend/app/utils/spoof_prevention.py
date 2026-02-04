@@ -12,9 +12,6 @@ class SpoofPrevention:
     def __init__(self):
         self.frame_history: List[np.ndarray] = []
         self.face_positions: List[Tuple[int, int, int, int]] = []
-        # Track liveness evidence across the whole capture sequence
-        self.movement_seen: bool = False
-        self.blink_seen: bool = False
         
     def calculate_ear(self, eye_landmarks) -> float:
         """
@@ -140,23 +137,13 @@ class SpoofPrevention:
         # Check for blink (simplified)
         blink_detected = self.detect_blink(face_image)
 
-        # Accumulate evidence across frames (more reliable than requiring same-frame events)
-        self.movement_seen = self.movement_seen or movement_detected
-        self.blink_seen = self.blink_seen or blink_detected
-        
-        # Require BOTH movement AND blink/eye-activity across the sequence
-        if self.movement_seen and self.blink_seen:
+        # Liveness passes if EITHER movement OR blink is detected
+        if movement_detected or blink_detected:
             return True, "Liveness verified"
         
-        # If we have enough frames and liveness conditions weren't met, likely spoof/static
+        # If we have enough frames and no movement/blink, might be static image
         if len(self.frame_history) >= settings.SPOOF_CHECK_FRAMES:
-            if not self.movement_seen and not self.blink_seen:
-                return False, "No movement or blink detected - possible static image"
-            if not self.movement_seen:
-                return False, "No head movement detected - possible static image"
-            if not self.blink_seen:
-                return False, "No blink/eye activity detected - possible static image"
-            return False, "Liveness not verified - please try again"
+            return False, "No movement detected - possible static image"
         
         return False, "Collecting frames for liveness check"
     
@@ -164,8 +151,6 @@ class SpoofPrevention:
         """Reset frame history and positions"""
         self.frame_history = []
         self.face_positions = []
-        self.movement_seen = False
-        self.blink_seen = False
 
 
 def process_video_frame_for_spoof(frame_bytes: bytes) -> Tuple[bool, str, Optional[Tuple[int, int, int, int]]]:
