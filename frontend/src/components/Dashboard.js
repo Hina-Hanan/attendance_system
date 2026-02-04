@@ -15,7 +15,6 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [exporting, setExporting] = useState(false);
-  const [todayDailySummary, setTodayDailySummary] = useState([]);
   const [lookupDailySummary, setLookupDailySummary] = useState([]);
 
   useEffect(() => {
@@ -26,17 +25,14 @@ const Dashboard = () => {
     try {
       setLoading(true);
       setError(null);
-      const todayKey = new Date().toISOString().split('T')[0];
-      const [usersRes, attendanceRes, allUsersRes, summaryRes] = await Promise.all([
+      const [usersRes, attendanceRes, allUsersRes] = await Promise.all([
         getTotalUsers(),
         getTodayAttendance(),
         getUsers(),
-        getDailySummary(todayKey).catch(() => ({ data: { summaries: [] } })),
       ]);
       setTotalUsers(usersRes.data.total_users);
       setTodayAttendance(attendanceRes.data);
       setAllUsers(allUsersRes.data || []);
-      setTodayDailySummary(summaryRes.data?.summaries || []);
     } catch (err) {
       const msg = err.response?.status === 500
         ? 'Server error. Ensure the backend is running and the database has the latest schema.'
@@ -220,21 +216,6 @@ const Dashboard = () => {
             {exporting ? 'Exporting...' : 'Export CSV'}
           </button>
         </div>
-        {todayDailySummary.length > 0 && (
-          <div style={{ marginBottom: '12px', padding: '12px', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
-            <strong>Total active hours today (per user):</strong>
-            <ul style={{ margin: '8px 0 0', paddingLeft: '20px' }}>
-              {todayDailySummary.map((s) => (
-                <li key={s.user_id}>
-                  {s.user_number != null ? `#${s.user_number} ` : ''}{s.username}: <strong>{s.total_duration}</strong>
-                  {s.sessions && s.sessions.length > 1 && (
-                    <span style={{ color: '#666', fontSize: '0.9em' }}> ({s.sessions.length} sessions)</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
           <button className={`btn ${todayFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setTodayFilter('all')}>
             All ({todayAttendance.length})
